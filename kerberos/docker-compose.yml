@@ -49,6 +49,112 @@ services:
       - secret:/var/lib/secret
       - ./kdc/krb5.conf:/etc/krb5.conf
 
+
+
+  schema-registry:
+    image: confluentinc/cp-schema-registry:5.1.0
+    hostname: schema-registry.kerberos-demo.local
+    container_name: schema-registry
+    depends_on:
+      - kafka
+    ports:
+      - "8085:8085"
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+
+      # This is the configuration to connect to the Kafka cluster
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: SASL_PLAINTEXT://kafka.kerberos-demo.local:9093
+      SCHEMA_REGISTRY_KAFKASTORE_SASL_JAAS_CONFIG: com.sun.security.auth.module.Krb5LoginModule required \ serviceName="kafka" \ useKeyTab=true \ storeKey=true \ keyTab="/var/lib/secret/kafka-admin.key" \ principal="admin/for-kafka@TEST.CONFLUENT.IO";
+      SCHEMA_REGISTRY_KAFKASTORE_SASL_MECHANISM: GSSAPI
+      SCHEMA_REGISTRY_KAFKASTORE_SECURITY_PROTOCOL: SASL_PLAINTEXT
+      SCHEMA_REGISTRY_KAFKASTORE_TOPIC: _schemas
+
+      # Http endpoint:
+      SCHEMA_REGISTRY_LISTENERS: "http://0.0.0.0:8085"
+
+      # This is the SSL setup:
+      # SCHEMA_REGISTRY_LISTENERS: "https://0.0.0.0:8085"
+      # SCHEMA_REGISTRY_SSL_KEYSTORE_LOCATION: /etc/kafka/secrets/kafka.schemaregistry.keystore.jks
+      # SCHEMA_REGISTRY_SSL_KEYSTORE_PASSWORD: confluent
+      # SCHEMA_REGISTRY_SSL_KEY_PASSWORD: confluent
+      # SCHEMA_REGISTRY_SCHEMA_REGISTRY_INTER_INSTANCE_PROTOCOL: "https"
+
+      # SCHEMA_REGISTRY_OPTS: -Djava.security.auth.login.config=/etc/kafka/secrets/propertyfile.jaas
+      # SCHEMA_REGISTRY_AUTHENTICATION_METHOD: BASIC
+      # SCHEMA_REGISTRY_AUTHENTICATION_REALM: SchemaRegistryX
+      # SCHEMA_REGISTRY_AUTHENTICATION_ROLES: Administrators
+
+    volumes:
+      - secret:/var/lib/secret
+      - ./kdc/krb5.conf:/etc/krb5.conf
+
+  restproxy:
+    image: confluentinc/cp-kafka-rest:5.1.0
+    container_name: restproxy
+    restart: always
+    depends_on:
+      - schema-registry
+    hostname: restproxy.kerberos-demo.local
+
+    ports:
+      - "8086:8086"
+
+    environment:
+      KAFKA_REST_HOST_NAME: restproxy.kerberos-demo.local
+
+      # Listeners:
+      KAFKA_REST_LISTENERS: "http://0.0.0.0:8086"
+
+      KAFKA_REST_REQUEST_TIMEOUT_MS: 20000
+      KAFKA_REST_RETRY_BACKOFF_MS: 500
+
+      # Connection to Schema registry:
+      KAFKA_REST_SCHEMA_REGISTRY_URL: "http://schema-registry.kerberos-demo.local:8085"
+      # KAFKA_REST_BASIC_AUTH_CREDENTIALS_SOURCE: USER_INFO
+      # KAFKA_REST_BASIC_AUTH_USER_INFO: admin:admin_pw
+
+      # KAFKA_REST_CONSUMER_BASIC_AUTH_CREDENTIALS_SOURCE: USER_INFO
+      # KAFKA_REST_CONSUMER_BASIC_AUTH_USER_INFO: admin:admin_pw
+
+      # Connection to Kafka
+      # I think this is used for health check only?
+      KAFKA_REST_BOOTSTRAP_SERVERS: SASL_PLAINTEXT://kafka.kerberos-demo.local:9093
+      KAFKA_REST_SASL_JAAS_CONFIG: com.sun.security.auth.module.Krb5LoginModule required \ serviceName="kafka" \ useKeyTab=true \ storeKey=true \ keyTab="/var/lib/secret/kafka-admin.key" \ principal="admin/for-kafka@TEST.CONFLUENT.IO";
+      KAFKA_REST_SASL_MECHANISM: GSSAPI
+      KAFKA_REST_SECURITY_PROTOCOL: SASL_PLAINTEXT
+
+      # This is the actual connection:
+      KAFKA_REST_CLIENT_BOOTSTRAP_SERVERS: SASL_PLAINTEXT://kafka.kerberos-demo.local:9093
+      KAFKA_REST_CLIENT_SASL_JAAS_CONFIG: com.sun.security.auth.module.Krb5LoginModule required \ serviceName="kafka" \ useKeyTab=true \ storeKey=true \ keyTab="/var/lib/secret/kafka-admin.key" \ principal="admin/for-kafka@TEST.CONFLUENT.IO";
+      KAFKA_REST_CLIENT_SASL_MECHANISM: GSSAPI
+      KAFKA_REST_CLIENT_SECURITY_PROTOCOL: SASL_PLAINTEXT
+
+      #
+      # # Enforce client basic authentication
+      # KAFKAREST_OPTS: -Djava.security.auth.login.config=/etc/kafka/secrets/propertyfile_rest_proxy.jaas
+      # KAFKA_REST_AUTHENTICATION_METHOD: BASIC
+      # KAFKA_REST_AUTHENTICATION_REALM: RestProxy
+      # KAFKA_REST_AUTHENTICATION_ROLES: Administrators
+      #
+      # # Enable the confluent secutity with propagation
+      # KAFKA_REST_KAFKA_REST_RESOURCE_EXTENSION_CLASS: io.confluent.kafkarest.security.KafkaRestSecurityResourceExtension
+      # KAFKA_REST_CONFLUENT_LICENSE: ""
+      # KAFKA_REST_ZOOKEEPER_CONNECT: zookeeper-sr:2181
+      # KAFKA_REST_CONFLUENT_REST_AUTH_PROPAGATE_METHOD: JETTY_AUTH
+
+      # KAFKA_REST_LOG4J_ROOT_LOGLEVEL: DEBUG
+
+
+
+    ports:
+      - 8086:8086
+
+    volumes:
+      - secret:/var/lib/secret
+      - ./kdc/krb5.conf:/etc/krb5.conf
+
+
+
 volumes:
   secret: {}
 
